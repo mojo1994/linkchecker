@@ -1,3 +1,7 @@
+"ATEMPTION" YOU HAVE TO CREATE AN ACCOUNT IN VIRUSTOTAL TO GET "API" CODE AND INSERT IN TERMUX AFTER PROCESS
+
+
+
 # linkchecker
 a "link checker" code script write with python that scans vuln malware in link website, use with learning ethical
 
