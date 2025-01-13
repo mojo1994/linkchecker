@@ -8,7 +8,7 @@ import socket
 init(autoreset=True)
 
 # Configuração da API
-API_KEY = 'febdad7d0cfb29952da3f58ffa7c44fc18fdb4e4297076206a4a12e56abffe80'
+API_KEY = ''
 BASE_URL = 'https://www.virustotal.com/api/v3/urls'
 
 # Exibe o título estilizado
