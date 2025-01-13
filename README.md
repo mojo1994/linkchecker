@@ -18,4 +18,7 @@ $: pkg install git
 
 and u can run the code
 
-$: git clone 
+$: git clone https://github.com/mojo1994/linkchecker
+
+$: python linkcheck.py
+
