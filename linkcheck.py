@@ -1,15 +1,39 @@
-import requests
+import os
+import re
+import sys
 import base64
 import argparse
-from colorama import Fore, Style, init
 import socket
+from urllib.parse import urlparse
+
+import requests
+from colorama import Fore, Style, init
 
 # Inicializa o colorama
 init(autoreset=True)
 
 # Configuração da API
-API_KEY = ''
+API_KEY = os.environ.get('VIRUSTOTAL_API_KEY', '')
 BASE_URL = 'https://www.virustotal.com/api/v3/urls'
+
+# Regex para validação básica de domínios
+_DOMAIN_RE = re.compile(
+    r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z]{2,})+$'
+)
+
+
+def _is_valid_domain(domain):
+    """Retorna True se *domain* parecer um nome de host válido."""
+    return bool(_DOMAIN_RE.match(domain))
+
+
+def _is_valid_url(url):
+    """Retorna True se *url* tiver esquema http(s) e um host válido."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        return False
+    host = parsed.hostname or ''
+    return _is_valid_domain(host)
 
 # Exibe o título estilizado
 def show_title():
@@ -34,17 +58,29 @@ def encode_url(url):
 
 # Função para verificar o IP do site
 def get_site_ip(site):
+    if not _is_valid_domain(site):
+        print(Fore.RED + "[ERRO] Domínio inválido. Use o formato: example.com")
+        return
     try:
         ip = socket.gethostbyname(site)
         print(Fore.GREEN + f"O IP do site {site} é: {ip}")
-    except Exception as e:
+    except socket.gaierror as e:
+        print(Fore.RED + f"[ERRO] Não foi possível resolver o domínio: {e}")
+    except OSError as e:
         print(Fore.RED + f"[ERRO] Não foi possível obter o IP: {e}")
 
 # Função para verificar vulnerabilidades do site
 def check_vulnerability(site):
+    if not _is_valid_domain(site):
+        print(Fore.RED + "[ERRO] Domínio inválido. Use o formato: example.com")
+        return
     try:
         print(Fore.YELLOW + f"[INFO] Verificando vulnerabilidades no site {site}...")
-        response = requests.get(f"https://www.vulnscan.org/api/v1/?url={site}")
+        response = requests.get(
+            "https://www.vulnscan.org/api/v1/",
+            params={"url": site},
+            timeout=30,
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -56,15 +92,25 @@ def check_vulnerability(site):
                 print(Fore.GREEN + "[SEGURO] Nenhuma vulnerabilidade encontrada.")
         else:
             print(Fore.RED + f"[ERRO] Não foi possível verificar as vulnerabilidades: {response.status_code}")
-    except Exception as e:
-        print(Fore.RED + f"[ERRO] Ocorreu um erro: {e}")
+    except requests.ConnectionError as e:
+        print(Fore.RED + f"[ERRO] Falha de conexão: {e}")
+    except requests.Timeout:
+        print(Fore.RED + "[ERRO] A requisição excedeu o tempo limite.")
+    except requests.RequestException as e:
+        print(Fore.RED + f"[ERRO] Ocorreu um erro na requisição: {e}")
 
 # Função para verificar se o site é seguro
 def check_url(url, force=False):
+    if not _is_valid_url(url):
+        print(Fore.RED + "[ERRO] URL inválida. Use o formato: https://example.com")
+        return
+    if not API_KEY:
+        print(Fore.RED + "[ERRO] API key não configurada. Defina a variável de ambiente VIRUSTOTAL_API_KEY.")
+        return
     try:
         encoded_url = encode_url(url)
         headers = {'x-apikey': API_KEY}
-        response = requests.get(f"{BASE_URL}/{encoded_url}", headers=headers)
+        response = requests.get(f"{BASE_URL}/{encoded_url}", headers=headers, timeout=30)
 
         if response.status_code == 200:
             result = response.json()
@@ -90,17 +136,20 @@ def check_url(url, force=False):
             submit_url(url)
         else:
             print(Fore.RED + f"[ERRO] Erro ao verificar o link: {response.status_code}")
-            print(response.json())
-    except Exception as e:
-        print(Fore.RED + f"[ERRO] Ocorreu um erro: {e}")
+    except requests.ConnectionError as e:
+        print(Fore.RED + f"[ERRO] Falha de conexão: {e}")
+    except requests.Timeout:
+        print(Fore.RED + "[ERRO] A requisição excedeu o tempo limite.")
+    except requests.RequestException as e:
+        print(Fore.RED + f"[ERRO] Ocorreu um erro na requisição: {e}")
 
 # Função para enviar uma URL para análise
 def submit_url(url):
     headers = {'x-apikey': API_KEY}
-    response = requests.post(BASE_URL, headers=headers, data={'url': url})
+    response = requests.post(BASE_URL, headers=headers, data={'url': url}, timeout=30)
 
     if response.status_code == 200:
-        print(Fore.GREEN + f"[OK] URL enviada para análise com sucesso!")
+        print(Fore.GREEN + "[OK] URL enviada para análise com sucesso!")
     else:
         print(Fore.RED + f"[ERRO] Falha ao enviar URL. Código: {response.status_code}")
 
@@ -129,6 +178,11 @@ def main():
           -L   Lista o histórico de URLs verificadas.
         
         Navegue pelo menu principal para escolher uma das funções.
+        
+        Configuração:
+          Defina a variável de ambiente VIRUSTOTAL_API_KEY com a sua
+          chave de API do VirusTotal antes de usar a opção 3.
+          Exemplo: export VIRUSTOTAL_API_KEY="sua-chave-aqui"
         """)
         return
     elif args.L:
